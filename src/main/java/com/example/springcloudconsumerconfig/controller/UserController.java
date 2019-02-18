@@ -1,0 +1,85 @@
+package com.example.springcloudconsumerconfig.controller;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+import javax.servlet.http.HttpServletRequest;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cloud.client.ServiceInstance;
+import org.springframework.cloud.client.loadbalancer.LoadBalancerClient;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.client.RestTemplate;
+
+import com.netflix.hystrix.contrib.javanica.annotation.HystrixCommand;
+
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.ApiParam;
+import io.swagger.annotations.ApiResponse;
+
+@Api("springcloud consumer user 控制器")
+@RequestMapping("user")
+@RestController
+public class UserController {
+
+	 @Autowired
+	    private RestTemplate restTemplate;
+	
+	 @Autowired
+	 private LoadBalancerClient loadBalancerClient;
+	 /**
+	     * @param id
+	     * @return
+	     */
+	    @ApiOperation(value = "根据用户id查询用户信息", httpMethod = "GET", produces = "application/json")
+	    @ApiResponse(code = 200, message = "success", response = Object.class)
+	    @GetMapping("{id}")
+	    @HystrixCommand(fallbackMethod="userFallbackMethod")
+	    public Object getUser(@ApiParam(name = "id", required = true, value = "用户Id") @PathVariable String id) {
+	        return this.restTemplate.getForObject("http://springcloud-provider-config/user/" + id, Object.class);
+	    }
+
+	    public Object userFallbackMethod(String id){
+	        return null;
+	    }
+
+	    /**
+	     * 这块ribbon不支持复杂数据类型list，所以要用数组接受，然后转list
+	     * @return
+	     */
+	    @GetMapping("list")
+	    @HystrixCommand(fallbackMethod = "userList")
+	    public List<Object> users(HttpServletRequest request) {
+	        try {
+	        	Object[] forObject = this.restTemplate.getForObject("http://springcloud-provider-config/user/list", Object[].class);
+	            List<Object> users = Arrays.asList(forObject);
+	            return users == null ? new ArrayList<Object>() : users;
+	        } catch (Exception e) {
+	            e.printStackTrace();
+	        }
+	        return null;
+	    }
+
+	    public List<Object> userList(HttpServletRequest request) {
+	    	return null;
+	    }
+
+	    /**
+	     * 通过服务id获取服务的地址
+	     * @return
+	     */
+	    @GetMapping("ribbon")
+	    public String ribbon(){
+	        ServiceInstance serviceInstance = loadBalancerClient.choose("springcloud-provider-config");
+	        return serviceInstance.getUri().toString();
+	    }
+	    @GetMapping("test")
+	    public String getString() {
+	        return this.restTemplate.getForObject("http://springcloud-provider-config/user/test", String.class);
+	    }
+}
